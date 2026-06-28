@@ -1,0 +1,5 @@
+duckdb>=1.5
+streamlit>=1.58
+pandas>=2.2
+plotly>=5.20
+rapidfuzz>=3.0
