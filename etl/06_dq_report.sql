@@ -6,7 +6,11 @@
 COPY (
   SELECT 'fact_award' AS tbl, 'rows'              AS metric, count(*)::BIGINT AS v FROM 'data/fact_award.parquet'
   UNION ALL SELECT 'fact_award','has_detail',         count(*) FILTER (WHERE has_detail)        FROM 'data/fact_award.parquet'
-  UNION ALL SELECT 'fact_award','value_suspect',      count(*) FILTER (WHERE value_is_suspect)  FROM 'data/fact_award.parquet'
+  UNION ALL SELECT 'fact_award','vq_junk_magnitude',  count(*) FILTER (WHERE value_quality='junk_magnitude')      FROM 'data/fact_award.parquet'
+  UNION ALL SELECT 'fact_award','vq_junk_sequence',   count(*) FILTER (WHERE value_quality='junk_sequence')       FROM 'data/fact_award.parquet'
+  UNION ALL SELECT 'fact_award','vq_review',          count(*) FILTER (WHERE value_quality='review')              FROM 'data/fact_award.parquet'
+  UNION ALL SELECT 'fact_award','vq_suspect',         count(*) FILTER (WHERE value_quality='suspect_placeholder') FROM 'data/fact_award.parquet'
+  UNION ALL SELECT 'fact_award','value_excluded',     count(*) FILTER (WHERE value_is_suspect)                    FROM 'data/fact_award.parquet'
   UNION ALL SELECT 'fact_award','misaligned_scrape',  count(*) FILTER (WHERE misaligned_scrape) FROM 'data/fact_award.parquet'
   UNION ALL SELECT 'fact_award','null_value',         count(*) FILTER (WHERE contract_value_inr IS NULL) FROM 'data/fact_award.parquet'
   UNION ALL SELECT 'fact_award','null_bids',          count(*) FILTER (WHERE bids_received IS NULL)       FROM 'data/fact_award.parquet'

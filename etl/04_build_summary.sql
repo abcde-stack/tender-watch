@@ -102,7 +102,6 @@ COPY (
 COPY (
   SELECT 'Single bid'   AS flag, count(*) FILTER (WHERE f_single_bid)   AS n FROM 'data/flag_award.parquet'
   UNION ALL SELECT 'Zero bids',    count(*) FILTER (WHERE f_zero_bid)     FROM 'data/flag_award.parquet'
-  UNION ALL SELECT 'Value suspect',count(*) FILTER (WHERE f_value_suspect)FROM 'data/flag_award.parquet'
   UNION ALL SELECT 'Short window',  count(*) FILTER (WHERE f_short_window) FROM 'data/flag_award.parquet'
   UNION ALL SELECT 'Low EMD',       count(*) FILTER (WHERE f_low_emd)      FROM 'data/flag_award.parquet'
   UNION ALL SELECT 'High fee',      count(*) FILTER (WHERE f_high_fee)     FROM 'data/flag_award.parquet'
@@ -126,3 +125,32 @@ COPY (
     (SELECT sum(contract_value_inr) FROM 'data/fact_award.parquet' WHERE NOT value_is_suspect) AS total_value,
     (SELECT count(*) FROM 'data/flag_award.parquet' WHERE f_single_bid)               AS n_single_bid
 ) TO 'data/sum_overview.parquet' (FORMAT parquet);
+
+-- value-quality tier tallies (Data Quality page headline) -------------------
+COPY (
+  SELECT value_quality,
+         count(*)                  AS n,
+         sum(contract_value_inr)   AS sum_value
+  FROM 'data/fact_award.parquet'
+  GROUP BY value_quality
+  ORDER BY n DESC
+) TO 'data/sum_value_quality.parquet' (FORMAT parquet);
+
+-- per-record anomaly list (Data Quality page table). Small (~1k rows). The junk
+-- tiers are excluded from money totals elsewhere; review/suspect are kept. This
+-- is a transparency artifact: the raw value is shown, never silently corrected.
+COPY (
+  SELECT a.value_quality,
+         a.portal_id,
+         a.contract_value_raw,
+         a.contract_value_inr,
+         o.org_name_raw                                        AS org_name,
+         a.winner_name_raw                                     AS winner,
+         a.contract_at,
+         a.award_year,
+         regexp_matches(coalesce(a.contract_value_raw,''), '1234567') AS seq_signature
+  FROM 'data/fact_award.parquet' a
+  LEFT JOIN 'data/dim_org.parquet' o USING (org_id)
+  WHERE a.value_quality IN ('junk_magnitude','junk_sequence','review','suspect_placeholder')
+  ORDER BY a.value_quality, a.contract_value_inr DESC NULLS LAST
+) TO 'data/sum_value_anomaly.parquet' (FORMAT parquet);
