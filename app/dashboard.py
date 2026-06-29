@@ -43,6 +43,22 @@ def cr(rupees) -> str:
     return f"₹{cr_val:,.2f} Cr"
 
 
+# Human labels and one-line meanings for the value-quality tiers. Single source of
+# truth for the Data Quality page. These describe DATA ERRORS, not wrongdoing.
+VQ_LABEL = {
+    "junk_magnitude": "Junk: impossibly large (over ₹10,000 Cr)",
+    "junk_sequence": "Junk: placeholder digits (for example 12345678)",
+    "review": "Review: very large (₹1,000 to 10,000 Cr)",
+    "suspect_placeholder": "Suspect: placeholder-looking value",
+}
+VQ_KEEP_NOTE = {
+    "junk_magnitude": "excluded from all totals",
+    "junk_sequence": "excluded from all totals",
+    "review": "kept in totals, may be a genuine large contract",
+    "suspect_placeholder": "kept in totals, plausible value that looks like a default",
+}
+
+
 # our state labels -> the GeoJSON's ST_NM names (only the ones that differ).
 # Note the GeoJSON merges Dadra & Nagar Haveli with Daman & Diu into one region.
 STATE_TO_GEO = {
@@ -100,7 +116,7 @@ st.caption(
 page = st.sidebar.radio(
     "View",
     ["Overview", "Red-flag explorer", "States", "Central", "Vendors", "Departments",
-     "Search", "Methodology"],
+     "Search", "Data Quality", "Methodology"],
 )
 st.sidebar.markdown("---")
 st.sidebar.info(
@@ -985,6 +1001,77 @@ elif page == "Central":
             "⬇ Download these awards (CSV)", aw.to_csv(index=False).encode(),
             "central_awards.csv", "text/csv",
         )
+
+
+# --------------------------------------------------------------- Data Quality
+elif page == "Data Quality":
+    st.subheader("Data quality: contract-value anomalies")
+    st.markdown(
+        "Some awards carry contract values that are implausible or contain placeholder "
+        "digits (for example `12345678`). These almost certainly reflect data-entry "
+        "mistakes on the **source CPPP portal**. They are **not** real contract amounts "
+        "and imply **no wrongdoing** by any office or vendor. We list them here so the "
+        "errors are visible rather than hidden, and the high-confidence junk is kept out "
+        "of every total elsewhere on this site."
+    )
+
+    vq = q(f"SELECT value_quality, n, sum_value FROM {p('sum_value_quality')}")
+    by_tier = dict(zip(vq.value_quality, vq.n))
+    total_awards = int(vq.n.sum())
+    n_excluded = int(by_tier.get("junk_magnitude", 0) + by_tier.get("junk_sequence", 0))
+    n_review = int(by_tier.get("review", 0))
+    n_suspect = int(by_tier.get("suspect_placeholder", 0))
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Excluded as junk", f"{n_excluded:,}",
+              f"{100*n_excluded/total_awards:.3f}% of awards")
+    c2.metric("Flagged for review", f"{n_review:,}")
+    c3.metric("Suspect placeholders", f"{n_suspect:,}")
+    st.caption(
+        f"Junk values are excluded from all money totals on this site "
+        f"({n_excluded:,} of {total_awards:,} awards). Review and suspect values are "
+        "kept in totals and shown here for transparency."
+    )
+
+    tiers = ["junk_magnitude", "junk_sequence", "review", "suspect_placeholder"]
+    pick = st.multiselect(
+        "Show tiers",
+        tiers, default=tiers,
+        format_func=lambda t: VQ_LABEL.get(t, t),
+    )
+    only_seq = st.checkbox("Only placeholder-sequence values (12345678 / 1234567)", value=False)
+
+    for t in pick:
+        st.caption(f"**{VQ_LABEL.get(t, t)}** ({VQ_KEEP_NOTE.get(t, '')})")
+    tlist = ",".join("'" + t + "'" for t in pick) or "''"
+    seq_clause = " AND seq_signature" if only_seq else ""
+    df = q(
+        f"SELECT value_quality, portal_id, contract_value_raw AS raw_value, "
+        f"round(contract_value_inr/1e7, 3) AS parsed_value_cr, seq_signature, "
+        f"org_name, winner, contract_at AS award_date, award_year "
+        f"FROM {p('sum_value_anomaly')} "
+        f"WHERE value_quality IN ({tlist}){seq_clause} "
+        f"ORDER BY value_quality, contract_value_inr DESC NULLS LAST"
+    )
+    st.dataframe(
+        df, width="stretch", hide_index=True,
+        column_config={
+            "value_quality": st.column_config.TextColumn("Tier"),
+            "raw_value": st.column_config.TextColumn("Raw value (as stored)"),
+            "parsed_value_cr": st.column_config.NumberColumn("Parsed (₹ Cr)", format="%.3f"),
+            "seq_signature": st.column_config.CheckboxColumn("Placeholder seq."),
+            "portal_id": st.column_config.TextColumn("Tender ID / Ref No"),
+        },
+    )
+    st.caption(
+        f"{len(df):,} records shown. Verify any record on the source portal by its "
+        "Tender ID (see the sidebar). The raw value is shown exactly as stored; it is "
+        "never silently corrected."
+    )
+    st.download_button(
+        "⬇ Download these anomalies (CSV)", df.to_csv(index=False).encode(),
+        "value_anomalies.csv", "text/csv",
+    )
 
 
 # --------------------------------------------------------------- Methodology
