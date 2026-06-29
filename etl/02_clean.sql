@@ -121,7 +121,9 @@ SELECT
                   THEN NULL ELSE trim(a.tender_type_raw) END
     END                                                        AS tender_type,
     regexp_full_match(trim(coalesce(a.tender_type_raw,'x')), '[0-9]+') AS misaligned_scrape,
+    a.contract_value_raw,                                     -- raw string, for the DQ page + tiering
     money(a.contract_value_raw)                                AS contract_value_inr,
+    value_quality(a.contract_value_raw)                        AS value_quality,
     a.bids_received,
     a.published_at,
     a.contract_at,
@@ -129,10 +131,10 @@ SELECT
     a.award_year,
     a.scraped_at,
     a.has_detail,
-    -- implausible value: parse failed, or absurdly small/large
-    (money(a.contract_value_raw) IS NULL
-       OR money(a.contract_value_raw) < 100
-       OR money(a.contract_value_raw) > 1e11)                  AS value_is_suspect,
+    -- data-quality exclusion flag: TRUE for the tiers we keep OUT of money totals.
+    -- Strict superset of the old rule (now also excludes junk_sequence).
+    (value_quality(a.contract_value_raw)
+        IN ('missing','too_small','junk_magnitude','junk_sequence'))  AS value_is_suspect,
     a.winner_name_raw,
     a.winner_addr_raw
 FROM stg_award a

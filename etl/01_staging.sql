@@ -45,6 +45,33 @@ CREATE OR REPLACE MACRO ts(s) AS
 CREATE OR REPLACE MACRO whole(s) AS
   try_cast(nullif(regexp_replace(coalesce(s,''), '[^0-9]', '', 'g'), '') AS INTEGER);
 
+-- digits-only integer part of a money string ('INR 1,23,456.50' -> '123456')
+CREATE OR REPLACE MACRO cv_intpart(s) AS
+  split_part(regexp_replace(coalesce(s,''), '[^0-9.]', '', 'g'), '.', 1);
+
+-- Tiered contract-value quality label. These are SOURCE DATA-QUALITY tiers, not
+-- accusations. junk_* are clerical/placeholder errors and are excluded from money
+-- totals (via value_is_suspect, see 02_clean.sql). review/suspect are KEPT in totals
+-- but surfaced on the Data Quality page. See docs/superpowers/plans/2026-06-29-value-anomaly-data-quality.md
+--   missing/too_small : no usable value
+--   junk_magnitude    : over 1e11 (INR 10,000 cr), physically implausible
+--   junk_sequence     : contains the sequential placeholder run '1234567'/'12345678'
+--   review            : over 1e10 (INR 1,000 cr), plausible-but-large, needs a human eye
+--   suspect_placeholder: value is exactly 123456 / 1123456 / a single repeated digit
+CREATE OR REPLACE MACRO value_quality(s) AS
+  CASE
+    WHEN money(s) IS NULL                           THEN 'missing'
+    WHEN money(s) < 100                             THEN 'too_small'
+    WHEN money(s) > 1e11                            THEN 'junk_magnitude'
+    WHEN regexp_matches(coalesce(s,''), '1234567')  THEN 'junk_sequence'
+    WHEN money(s) > 1e10                            THEN 'review'
+    WHEN regexp_matches(cv_intpart(s), '^1?123456$')
+      OR ( length(cv_intpart(s)) >= 6
+           AND cv_intpart(s) = repeat(left(cv_intpart(s),1), length(cv_intpart(s))) )
+                                                    THEN 'suspect_placeholder'
+    ELSE 'clean'
+  END;
+
 -- deterministic surrogate key from a normalized string
 CREATE OR REPLACE MACRO surrogate(s) AS md5(coalesce(s,''));
 
