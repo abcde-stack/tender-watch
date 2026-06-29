@@ -141,6 +141,10 @@ st.sidebar.caption(
     "Flags are statistical indicators, not accusations. See the **Methodology** page "
     "for the full disclaimer and corrections policy."
 )
+st.sidebar.caption(
+    "**Source code:** "
+    "[github.com/abcde-stack/tender-watch](https://github.com/abcde-stack/tender-watch)"
+)
 
 
 # ------------------------------------------------------------------- Overview
