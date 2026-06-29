@@ -220,8 +220,9 @@ if page == "Overview":
         f"**{matched:,} awards ({pct:.0f}%)** could be linked to a tender notice. "
         "The **Short window / Low EMD / High fee / Corrigendum** flags (and the upper "
         "risk-score range) apply only to that matched subset, so their totals "
-        "**under-state reality**. **Single bid / Zero bids / Value suspect** are "
-        f"reliable across all {int(o.total_awards):,} awards."
+        "**under-state reality**. **Single bid / Zero bids** are "
+        f"reliable across all {int(o.total_awards):,} awards. Implausible or "
+        "placeholder contract values are listed on the **Data Quality** page."
     )
 
 
@@ -234,7 +235,7 @@ elif page == "Red-flag explorer":
     )
     flags = f2.multiselect(
         "Must have flag(s)",
-        ["Single bid", "Zero bids", "Value suspect", "Short window",
+        ["Single bid", "Zero bids", "Short window",
          "Low EMD", "High fee", "Corrigendum"],
         default=["Single bid"],
     )
@@ -249,7 +250,7 @@ elif page == "Red-flag explorer":
 
     flagcol = {
         "Single bid": "f.f_single_bid", "Zero bids": "f.f_zero_bid",
-        "Value suspect": "f.f_value_suspect", "Short window": "f.f_short_window",
+        "Short window": "f.f_short_window",
         "Low EMD": "f.f_low_emd", "High fee": "f.f_high_fee",
         "Corrigendum": "f.f_corrigendum",
     }
@@ -586,7 +587,6 @@ elif page == "Departments":
             fb = q(
                 f"SELECT count(*) FILTER (WHERE f_single_bid)   AS single_bid, "
                 f"count(*) FILTER (WHERE f_zero_bid)            AS zero_bid, "
-                f"count(*) FILTER (WHERE f_value_suspect)       AS value_suspect, "
                 f"count(*) FILTER (WHERE f_short_window)        AS short_window, "
                 f"count(*) FILTER (WHERE f_corrigendum)         AS corrigendum "
                 f"FROM {p('flag_award')} WHERE org_id = '{oid}'"
